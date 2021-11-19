@@ -280,6 +280,10 @@ LIBXSMM_API libxsmm_dnn_fullyconnected* libxsmm_dnn_create_fullyconnected(libxsm
             handle->ifm_subtasks = 1/*((handle->bc % 1 == 0) && (handle->upd_2d_blocking == 0)) ? 1 : 1*/;
             handle->ofm_subtasks = 1/*((handle->bk % 1 == 0) && (handle->upd_2d_blocking == 0)) ? 1 : 1*/;
           }
+
+          handle->fwd_bf = atoi(getenv("FWD_BF"));
+          handle->bwd_bf = atoi(getenv("BWD_BF"));
+          handle->upd_bf = atoi(getenv("UPD_BF"));
 #endif
         } else if ( (handle->desc.datatype_in == LIBXSMM_DNN_DATATYPE_BF16) && (handle->desc.datatype_out == LIBXSMM_DNN_DATATYPE_BF16) )  {
 #if 0

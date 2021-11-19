@@ -18,6 +18,9 @@
 # include <omp.h>
 #endif
 
+//#define DETAILED_PROFILE
+#define N_PROF_THREADS 128
+
 /* include c-based dnn library */
 #include "../common/dnn_common.h"
 
@@ -69,10 +72,26 @@ int main(int argc, char* argv[])
 
   unsigned long long l_start, l_end;
   double l_total = 0.0;
+  double l_fwd_fc[N_PROF_THREADS];
+  double l_bwdupd_fc[N_PROF_THREADS];
+  double l_allreduce[N_PROF_THREADS];
+  double l_optimizer[N_PROF_THREADS];
+  double l_fwd_loss[N_PROF_THREADS];
+  double l_bwd_loss[N_PROF_THREADS];
+  double first_bwdupd_compute = 0.0;
   double gflop = 0.0;
   int i, j, rank;
   double fil_size = 0.0;
   double act_size = 0.0;
+
+  for (i = 0; i < N_PROF_THREADS; i++) {
+    l_fwd_fc[i] = 0.0;
+    l_bwdupd_fc[i] = 0.0;
+    l_allreduce[i] = 0.0;
+    l_optimizer[i] = 0.0;
+    l_fwd_loss[i] = 0.0;
+    l_bwd_loss[i] = 0.0;
+  }
 
   libxsmm_dnn_fullyconnected_desc fullyconnected_desc;
   libxsmm_dnn_fullyconnected**    libxsmm_fc_layer;
@@ -576,13 +595,52 @@ int main(int argc, char* argv[])
       const int tid = 0;
 #endif
       for (j = 0; j < iters; ++j) {
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         for ( i = 0; i < num_layers; ++i) {
           libxsmm_dnn_fullyconnected_execute_st( libxsmm_fc_layer[i], LIBXSMM_DNN_COMPUTE_KIND_FWD, 0, tid );
         }
+ #ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_fwd_fc[0] += libxsmm_timer_duration(t0, t1);
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         libxsmm_dnn_softmaxloss_execute_st( libxsmm_softmax, LIBXSMM_DNN_COMPUTE_KIND_FWD, 0, tid );
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_fwd_loss[0] += libxsmm_timer_duration(t0, t1);
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         libxsmm_dnn_softmaxloss_execute_st( libxsmm_softmax, LIBXSMM_DNN_COMPUTE_KIND_BWD, 0, tid );
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_bwd_loss[0] += libxsmm_timer_duration(t0, t1);
+        }
+#endif
         for ( i = num_layers-1; i > 0; --i) {
+#ifdef DETAILED_PROFILE
+          if (tid == 0) {
+            t0 = libxsmm_timer_tick();
+          }
+#endif
           libxsmm_dnn_fullyconnected_execute_st( libxsmm_fc_layer[i], LIBXSMM_DNN_COMPUTE_KIND_BWDUPD, 0, tid );
+#ifdef DETAILED_PROFILE
+          if (tid == 0) {
+            t1 = libxsmm_timer_tick();
+            l_bwdupd_fc[0] += libxsmm_timer_duration(t0, t1);
+            if (i == num_layers-1) {
+              first_bwdupd_compute += libxsmm_timer_duration(t0, t1);
+            }
+          }
+#endif
           /* Thread 0 issues asynchronous all reduce */
           if (tid == 0) {
             MPI_Iallreduce(MPI_IN_PLACE, delfil_libxsmm[i], C[i]*C[i+1], MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD, &request[i%2]);

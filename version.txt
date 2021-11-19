@@ -1,1 +1,1 @@
-mlp_mpi_train_MNIST-1.16.1-773
+mlp_mpi-1.16.1-774

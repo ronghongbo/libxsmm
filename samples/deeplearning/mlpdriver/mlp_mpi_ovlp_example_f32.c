@@ -18,6 +18,9 @@
 # include <omp.h>
 #endif
 
+#define DETAILED_PROFILE
+#define N_PROF_THREADS 128
+
 /* include c-based dnn library */
 #include "../common/dnn_common.h"
 
@@ -70,10 +73,26 @@ int main(int argc, char* argv[])
 
   unsigned long long l_start, l_end;
   double l_total = 0.0;
+  double l_fwd_fc[N_PROF_THREADS];
+  double l_bwdupd_fc[N_PROF_THREADS];
+  double l_allreduce[N_PROF_THREADS];
+  double l_optimizer[N_PROF_THREADS];
+  double l_fwd_loss[N_PROF_THREADS];
+  double l_bwd_loss[N_PROF_THREADS];
+  double first_bwdupd_compute = 0.0;
   double gflop = 0.0;
   int i, j, rank;
   double fil_size = 0.0;
   double act_size = 0.0;
+
+  for (i = 0; i < N_PROF_THREADS; i++) {
+    l_fwd_fc[i] = 0.0;
+    l_bwdupd_fc[i] = 0.0;
+    l_allreduce[i] = 0.0;
+    l_optimizer[i] = 0.0;
+    l_fwd_loss[i] = 0.0;
+    l_bwd_loss[i] = 0.0;
+  }
 
   libxsmm_dnn_fullyconnected_desc fullyconnected_desc;
   libxsmm_dnn_fullyconnected**    libxsmm_fc_layer;
@@ -579,35 +598,123 @@ int main(int argc, char* argv[])
       const int tid = 0;
 #endif
       int tid_comm = tid - n_comp_threads;
+      unsigned long long t0, t1;
+
 
       for (j = 0; j < iters; ++j) {
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         for ( i = 0; i < num_layers; ++i) {
           if (tid < n_comp_threads) {
             libxsmm_dnn_fullyconnected_execute_st( libxsmm_fc_layer[i], LIBXSMM_DNN_COMPUTE_KIND_FWD, 0, tid );
           }
         }
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_fwd_fc[0] += libxsmm_timer_duration(t0, t1);
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         libxsmm_dnn_softmaxloss_execute_st( libxsmm_softmax, LIBXSMM_DNN_COMPUTE_KIND_FWD, 0, tid );
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_fwd_loss[0] += libxsmm_timer_duration(t0, t1);
+          t0 = libxsmm_timer_tick();
+        }
+#endif
         libxsmm_dnn_softmaxloss_execute_st( libxsmm_softmax, LIBXSMM_DNN_COMPUTE_KIND_BWD, 0, tid );
+#ifdef DETAILED_PROFILE
+        if (tid == 0) {
+          t1 = libxsmm_timer_tick();
+          l_bwd_loss[0] += libxsmm_timer_duration(t0, t1);
+        }
+#endif
         for ( i = num_layers-1; i > 0; --i) {
           if (tid < n_comp_threads) {
+#ifdef DETAILED_PROFILE
+            if (tid == 0) {
+              t0 = libxsmm_timer_tick();
+            }
+#endif
             libxsmm_dnn_fullyconnected_execute_st( libxsmm_fc_layer[i], LIBXSMM_DNN_COMPUTE_KIND_BWDUPD, 0, tid );
+#ifdef DETAILED_PROFILE
+            if (tid == 0) {
+              t1 = libxsmm_timer_tick();
+              l_bwdupd_fc[0] += libxsmm_timer_duration(t0, t1);
+              if (i == num_layers-1) {
+                first_bwdupd_compute += libxsmm_timer_duration(t0, t1);
+              }
+            }
+#endif
           }
           #pragma omp barrier
           if (tid >= n_comp_threads) {
+#ifdef DETAILED_PROFILE
+            if (tid == n_comp_threads) {
+              t0 = libxsmm_timer_tick();
+            }
+#endif
             int n_elts = (C[i]*C[i+1])/n_comm_threads;
             MPI_Allreduce(MPI_IN_PLACE, (float*)delfil_libxsmm[i]+tid_comm*n_elts, n_elts, MPI_FLOAT, MPI_SUM, comms[tid_comm]);
+#ifdef DETAILED_PROFILE
+            if (tid == n_comp_threads) {
+              t1 = libxsmm_timer_tick();
+              l_allreduce[0] += libxsmm_timer_duration(t0, t1);
+              t0 = libxsmm_timer_tick();
+            }
+#endif
             libxsmm_dnn_optimizer_execute_st( libxsmm_opt[i], 0, tid_comm );
+#ifdef DETAILED_PROFILE
+            if (tid == n_comp_threads) {
+              t1 = libxsmm_timer_tick();
+              l_optimizer[0] += libxsmm_timer_duration(t0, t1);
+            }
+#endif
           }
         }
         /* Only UPD pass for first layer */
         if (tid < n_comp_threads) {
+#ifdef DETAILED_PROFILE
+          if (tid == 0) {
+            t0 = libxsmm_timer_tick();
+          }
+#endif
           libxsmm_dnn_fullyconnected_execute_st( libxsmm_fc_layer[0], LIBXSMM_DNN_COMPUTE_KIND_UPD, 0, tid );
+#ifdef DETAILED_PROFILE
+          if (tid == 0) {
+            t1 = libxsmm_timer_tick();
+            l_bwdupd_fc[0] += libxsmm_timer_duration(t0, t1);
+          }
+#endif
         }
         #pragma omp barrier
         if (tid >= n_comp_threads) {
+#ifdef DETAILED_PROFILE
+          if (tid == n_comp_threads) {
+            t0 = libxsmm_timer_tick();
+          }
+#endif
           int n_elts = (C[0]*C[1])/n_comm_threads;
           MPI_Allreduce(MPI_IN_PLACE, (float*)delfil_libxsmm[0]+tid_comm*n_elts, n_elts, MPI_FLOAT, MPI_SUM, comms[tid_comm]);
+#ifdef DETAILED_PROFILE
+          if (tid == n_comp_threads) {
+            t1 = libxsmm_timer_tick();
+            l_allreduce[1] += libxsmm_timer_duration(t0, t1);
+            t0 = libxsmm_timer_tick();
+          }
+#endif
           libxsmm_dnn_optimizer_execute_st( libxsmm_opt[0], 0, tid_comm );
+#ifdef DETAILED_PROFILE
+          if (tid == n_comp_threads) {
+            t1 = libxsmm_timer_tick();
+            l_optimizer[1] += libxsmm_timer_duration(t0, t1);
+          }
+#endif
         }
         #pragma omp barrier
       }
@@ -631,9 +738,21 @@ int main(int argc, char* argv[])
         printf("%i,", C[i] );
       }
       printf("%f,%f\n", ((double)(l_total/iters)), gflop/l_total);
+#ifdef DETAILED_PROFILE
+      double tot = /*l_allreduce[0] + l_optimizer[0] +*/ l_fwd_fc[0] + l_bwdupd_fc[0] + l_fwd_loss[0] + l_bwd_loss[0];
+      printf("FC time compute/loss = %.5g\n", ((double)(tot/iters)));
+      tot = l_allreduce[0] + l_optimizer[0];
+      printf("All-reduce + optimizer time overlaped = %.5g\n", ((double)(tot/iters)));
+      printf("Bwdupd compute time overlaped = %.5g\n", ((double)((l_bwdupd_fc[0]-first_bwdupd_compute)/iters)));
+      tot = l_optimizer[0] ;
+      printf("Optimizer time= %.5g\n", ((double)(tot/iters)));
+
+      tot = l_fwd_fc[0] + LIBXSMM_MAX( l_bwdupd_fc[0] - first_bwdupd_compute, l_allreduce[0] + l_optimizer[0]) + first_bwdupd_compute + l_fwd_loss[0] + l_bwd_loss[0] + l_allreduce[1] + l_optimizer[1];
+      printf("Total time on critical path = %.5g (exposed all_reduce + optimizer =  %.5g) \n", ((double)(tot/iters)), (double)((l_allreduce[1] + l_optimizer[1])/iters));
+#endif
     }
     MPI_Barrier(MPI_COMM_WORLD);
-#if 1
+#if 0
     if (rank == n_procs - 1) {
       for ( i = 0 ; i < num_layers; ++i ) {
         libxsmm_matdiff(&norms, LIBXSMM_DATATYPE_F32, C[i]*C[i+1], 1, delfil_libxsmm[i], delfil_libxsmm[i], 0, 0);
