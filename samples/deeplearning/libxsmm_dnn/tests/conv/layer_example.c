@@ -130,27 +130,27 @@ int main(int argc, char* argv[])
 
   /* reading new values from cli */
   i = 1;
-  if (argc > i) iters      = atoi(argv[i++]);
-  if (argc > i) ifw        = atoi(argv[i++]);
-  if (argc > i) ifh        = atoi(argv[i++]);
-  if (argc > i) nImg       = atoi(argv[i++]);
-  if (argc > i) nIfm       = atoi(argv[i++]);
-  if (argc > i) nOfm       = atoi(argv[i++]);
-  if (argc > i) kw         = atoi(argv[i++]);
-  if (argc > i) kh         = atoi(argv[i++]);
-  if (argc > i) padw       = atoi(argv[i++]);
-  if (argc > i) padh       = atoi(argv[i++]);
-  if (argc > i) stride     = atoi(argv[i++]);
-  if (argc > i) type       = *(argv[i++]);
-  if (argc > i) format     = *(argv[i++]);
-  if (argc > i) padding_mode = atoi(argv[i++]);
-  if (argc > i) fuse_type = atoi(argv[i++]);
+  if (argc > i) iters      = atoi(argv[i++]); // repetitions
+  if (argc > i) ifw        = atoi(argv[i++]); // W
+  if (argc > i) ifh        = atoi(argv[i++]); // H
+  if (argc > i) nImg       = atoi(argv[i++]); // N
+  if (argc > i) nIfm       = atoi(argv[i++]); // C
+  if (argc > i) nOfm       = atoi(argv[i++]); // K
+  if (argc > i) kw         = atoi(argv[i++]); // S
+  if (argc > i) kh         = atoi(argv[i++]); // R
+  if (argc > i) padw       = atoi(argv[i++]); // padw
+  if (argc > i) padh       = atoi(argv[i++]); // padh
+  if (argc > i) stride     = atoi(argv[i++]); // stride
+  if (argc > i) type       = *(argv[i++]);    // F(P), B(P), U(WU)
+  if (argc > i) format     = *(argv[i++]);    // L: libxsmm
+  if (argc > i) padding_mode = atoi(argv[i++]); // 0: no padding. >0: use padw/h for in and out feature maps
+  if (argc > i) fuse_type = atoi(argv[i++]); // 0: no fuse; 1: fuse bias; 2: fuse relu; 3: fuse bias relu
   if (argc > i) bc = atoi(argv[i++]);
   if (argc > i) bk = atoi(argv[i++]);
-  if (argc > i) prec_bf16 = atoi(argv[i++]);
-  if (argc > i) overwrite_output   = atoi(argv[i++]);
-  if (argc > i) avoid_bwd_wt_trans = atoi(argv[i++]);
-  if (argc > i) zero_output_rims_fwd = atoi(argv[i++]);
+  if (argc > i) prec_bf16 = atoi(argv[i++]); // 0: not bf16
+  if (argc > i) overwrite_output   = atoi(argv[i++]); // 0: do not overwrite output
+  if (argc > i) avoid_bwd_wt_trans = atoi(argv[i++]); // 0: do not externally transpose weight
+  if (argc > i) zero_output_rims_fwd = atoi(argv[i++]); // if >0: pad_h/w_out
 
   LIBXSMM_UNUSED(format);
 
@@ -268,6 +268,17 @@ int main(int argc, char* argv[])
   } else {
     /* cannot happen */
   }
+
+  printf("PERFDUMP,FP format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
+         "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_fwd.l1_ref, norms_fwd.l1_tst,"
+         "norms_fwd.l2_abs, norms_fwd.l2_rel, norms_fwd.linf_abs, norms_fwd.linf_rel, norms_fwd.normf_rel\n");
+  printf("PERFDUMP,BP format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
+        "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_bwd.l1_ref, norms_bwd.l1_tst,"
+        "norms_bwd.l2_abs, norms_bwd.l2_rel, norms_bwd.linf_abs, norms_bwd.linf_rel, norms_bwd.normf_rel\n");
+  printf("PERFDUMP,WU format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
+        "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_upd.l1_ref, norms_upd.l1_tst,"
+        "norms_upd.l2_abs, norms_upd.l2_rel, norms_upd.linf_abs, norms_upd.linf_rel, norms_upd.normf_rel\n");
+
   /* allocate data */
   naive_input           = (float*)libxsmm_aligned_malloc( (size_t)nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
   naive_input_save      = (float*)libxsmm_aligned_malloc( (size_t)nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
@@ -632,8 +643,8 @@ int main(int argc, char* argv[])
     printf("fp time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,FP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
-        ifw, ifh, kw, kh, stride, padw, padh, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_fwd.l1_ref, norms_fwd.l1_tst,
+    printf("PERFDUMP,FP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+        ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_fwd.l1_ref, norms_fwd.l1_tst,
         norms_fwd.l2_abs, norms_fwd.l2_rel, norms_fwd.linf_abs, norms_fwd.linf_rel, norms_fwd.normf_rel);
   }
 
@@ -674,8 +685,8 @@ int main(int argc, char* argv[])
     printf("bp time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,BP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
-        ifw, ifh, kw, kh, stride, padw, padh, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_bwd.l1_ref, norms_bwd.l1_tst,
+    printf("PERFDUMP,BP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+        ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_bwd.l1_ref, norms_bwd.l1_tst,
         norms_bwd.l2_abs, norms_bwd.l2_rel, norms_bwd.linf_abs, norms_bwd.linf_rel, norms_bwd.normf_rel);
   }
 
@@ -715,8 +726,8 @@ int main(int argc, char* argv[])
     printf("wu time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,WU,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
-        ifw, ifh, kw, kh, stride, padw, padh, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_upd.l1_ref, norms_upd.l1_tst,
+    printf("PERFDUMP,WU,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+        ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_upd.l1_ref, norms_upd.l1_tst,
         norms_upd.l2_abs, norms_upd.l2_rel, norms_upd.linf_abs, norms_upd.linf_rel, norms_upd.normf_rel);
   }
 
