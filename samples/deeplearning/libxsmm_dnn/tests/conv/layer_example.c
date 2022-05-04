@@ -269,16 +269,6 @@ int main(int argc, char* argv[])
     /* cannot happen */
   }
 
-  printf("PERFDUMP,FP format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
-         "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_fwd.l1_ref, norms_fwd.l1_tst,"
-         "norms_fwd.l2_abs, norms_fwd.l2_rel, norms_fwd.linf_abs, norms_fwd.linf_rel, norms_fwd.normf_rel\n");
-  printf("PERFDUMP,BP format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
-        "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_bwd.l1_ref, norms_bwd.l1_tst,"
-        "norms_bwd.l2_abs, norms_bwd.l2_rel, norms_bwd.linf_abs, norms_bwd.linf_rel, norms_bwd.normf_rel\n");
-  printf("PERFDUMP,WU format: LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm, ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk,"
-        "((double)(l_total/iters)), (flops*1e-9)/l_total, norms_upd.l1_ref, norms_upd.l1_tst,"
-        "norms_upd.l2_abs, norms_upd.l2_rel, norms_upd.linf_abs, norms_upd.linf_rel, norms_upd.normf_rel\n");
-
   /* allocate data */
   naive_input           = (float*)libxsmm_aligned_malloc( (size_t)nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
   naive_input_save      = (float*)libxsmm_aligned_malloc( (size_t)nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
@@ -643,7 +633,7 @@ int main(int argc, char* argv[])
     printf("fp time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,FP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+    printf("PERFDUMP,FP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%c,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
         ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_fwd.l1_ref, norms_fwd.l1_tst,
         norms_fwd.l2_abs, norms_fwd.l2_rel, norms_fwd.linf_abs, norms_fwd.linf_rel, norms_fwd.normf_rel);
   }
@@ -685,7 +675,7 @@ int main(int argc, char* argv[])
     printf("bp time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,BP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+    printf("PERFDUMP,BP,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%c,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
         ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_bwd.l1_ref, norms_bwd.l1_tst,
         norms_bwd.l2_abs, norms_bwd.l2_rel, norms_bwd.linf_abs, norms_bwd.linf_rel, norms_bwd.normf_rel);
   }
@@ -726,7 +716,7 @@ int main(int argc, char* argv[])
     printf("wu time = %.5g\n", ((double)(l_total/iters)));
     printf("GFLOPS  = %.5g\n", (flops*1e-9)/l_total);
 
-    printf("PERFDUMP,WU,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%s,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
+    printf("PERFDUMP,WU,%s,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%i,%c,%i,%i,%i,%i,%.5g,%.5g,%f,%f,%f,%f,%f,%f,%f\n", LIBXSMM_VERSION, nThreads, nImg, nIfm, nOfm,
         ifw, ifh, kw, kh, stride, padw, padh, format, padding_mode, fuse_type, bc, bk, ((double)(l_total/iters)), (flops*1e-9)/l_total, norms_upd.l1_ref, norms_upd.l1_tst,
         norms_upd.l2_abs, norms_upd.l2_rel, norms_upd.linf_abs, norms_upd.linf_rel, norms_upd.normf_rel);
   }
